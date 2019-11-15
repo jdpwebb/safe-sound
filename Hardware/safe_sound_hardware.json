@@ -1,0 +1,62 @@
+{
+    "Metadata": {
+        "Type": "Azure Sphere Hardware Definition",
+        "Version": 1
+    },
+    "Description":
+    {
+        "Name": "Hardware abstraction for SafeSound AI security project",
+        "MainCoreHeaderFileTopContent": [
+            "/* Copyright (c) Jeremy Webb. All rights reserved.",
+            "   Licensed under the MIT License. */",
+            "",
+            "// This file defines the mapping from the Avnet AESMS MT3620 Starter Kit to the",
+            "// abstraction used for the peripherals for the Safe Sound project."
+        ]
+    },
+    "Imports" : [ {"Path": "avnet_aesms_mt3620.json"} ],
+  "Peripherals": [
+    {
+      "Name": "BUTTON_A",
+      "Type": "Gpio",
+      "Mapping": "AVNET_AESMS_PIN14_GPIO12",
+      "Comment": "AVNET AESMS MT3620: Button A."
+    },
+    {
+      "Name": "BUTTON_B",
+      "Type": "Gpio",
+      "Mapping": "AVNET_AESMS_PIN15_GPIO13",
+      "Comment": "AVNET AESMS MT3620: Button A."
+    },
+    {
+      "Name": "LED_RED",
+      "Type": "Gpio",
+      "Mapping": "AVNET_AESMS_PIN11_GPIO8",
+      "Comment": "AVNET AESMS MT3620: Red LED."
+    },
+    {
+      "Name": "LED_GREEN",
+      "Type": "Gpio",
+      "Mapping": "AVNET_AESMS_PIN12_GPIO9",
+      "Comment": "AVNET AESMS MT3620: Green LED."
+    },
+    {
+      "Name": "LED_BLUE",
+      "Type": "Gpio",
+      "Mapping": "AVNET_AESMS_PIN13_GPIO10",
+      "Comment": "AVNET AESMS MT3620: Blue LED."
+    },
+    {
+      "Name": "MICROPHONE_CONTROLLER",
+      "Type": "Adc",
+      "Mapping": "AVNET_AESMS_ADC_CONTROLLER0",
+      "Comment": "AVNET AESMS MT3620: ADC Microphone controller"
+    },
+    {
+      "Name": "MICROPHONE",
+      "Type": "int",
+      "Mapping": "AVNET_AESMS_ADC_CHANNEL1",
+      "Comment": "AVNET AESMS MT3620: Connect external microphone ADC controller 0, channel 1 using SOCKET1 AN."
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "SchemaVersion": 1,
+  "Name" : "SafeSound",
+  "ComponentId" : "79bbad22-ec02-4dac-922a-7503143329cb",
+  "EntryPoint": "/bin/app",
+  "CmdArgs": [],
+  "Capabilities": {
+    "AllowedConnections": [],
+    "AllowedTcpServerPorts": [],
+    "AllowedUdpServerPorts": [],
+    "Adc": [
+      "$MICROPHONE_CONTROLLER"
+    ],
+    "Gpio": [
+      "$LED_RED",
+      "$LED_GREEN",
+      "$LED_BLUE",
+      "$BUTTON_A"
+    ],
+    "Uart": [],
+    "I2cMaster": [],
+    "SpiMaster": [],
+    "WifiConfig": false,
+    "NetworkConfig": false,
+    "SystemTime": false
+  }
+}
