@@ -26,13 +26,13 @@ float overall_inverse_confidence = 1;
 int last_prediction = 0;
 unsigned short num_same_prediction = 0;
 int vad_signal = 0;
-int preparedrecording_index = 0;
-const int preparedrecording_rows = sizeof(sample_wav_data) / (AUDIO_FRAME_SIZE * sizeof(short));
+int prepared_recording_index = 0;
+const int prepared_recording_rows = sizeof(sample_wav_data) / (AUDIO_FRAME_SIZE * sizeof(short));
 
 bool check_predict_setup()
 {
     Log_Debug("Prerecorded sample contains %d rows of 16-bit PCM data\n",
-		preparedrecording_rows);
+		prepared_recording_rows);
 
     int input_size = mfcc_GetInputSize(0);
     if (input_size != AUDIO_FRAME_SIZE)
@@ -103,11 +103,11 @@ void predict_single_frame(float* inputData, int* prediction, float* confidence) 
 bool prepare_prerecorded(float* featurizer_input_buffer) {
 	for (int j = 0; j < AUDIO_FRAME_SIZE; j++)
 	{
-		featurizer_input_buffer[j] = (float)sample_wav_data[preparedrecording_index][j] / 32768.0f;
+		featurizer_input_buffer[j] = (float)sample_wav_data[prepared_recording_index][j] / 32768.0f;
 	}
-	++preparedrecording_index;
+	++prepared_recording_index;
 	// if there is still data to process, return true
-	return preparedrecording_index < preparedrecording_rows;
+	return prepared_recording_index < prepared_recording_rows;
 }
 
 void predict_prerecorded()
@@ -148,5 +148,5 @@ void predict_reset()
 
 void prerecorded_reset()
 {
-	preparedrecording_index = 0;
+	prepared_recording_index = 0;
 }

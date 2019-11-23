@@ -1,4 +1,4 @@
-#include <errno.h>
+﻿#include <errno.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -27,7 +27,6 @@ static void TwinCallback(DEVICE_TWIN_UPDATE_STATE updateState, const unsigned ch
 	size_t payloadSize, void* userContextCallback);
 static int DirectMethodCallback(const char* method_name, const unsigned char* payload,
 	size_t size, unsigned char** response, size_t* response_size, void* userContextCallback);
-static void TwinReportBoolState(const char* propertyName, bool propertyValue);
 
 static void AzureTimerEventHandler(EventData* eventData);
 
@@ -58,8 +57,8 @@ static bool isArmed = true;
 /// </summary>
 static void TerminationHandler(int signalNumber)
 {
-    // Don't use Log_Debug here, as it is not guaranteed to be async-signal-safe.
-    terminationRequired = true;
+	// Don't use Log_Debug here, as it is not guaranteed to be async-signal-safe.
+	terminationRequired = true;
 }
 
 /// <summary>
@@ -74,30 +73,30 @@ static void SimulateEvent(void) {
 /// <summary>
 ///     Handle button timer event: if the button is pressed, change the LED blink rate.
 /// </summary>
-static void ButtonTimerEventHandler(EventData *eventData)
+static void ButtonTimerEventHandler(EventData* eventData)
 {
-    if (ConsumeTimerFdEvent(buttonPollTimerFd) != 0) {
-        terminationRequired = true;
-        return;
-    }
+	if (ConsumeTimerFdEvent(buttonPollTimerFd) != 0) {
+		terminationRequired = true;
+		return;
+	}
 
-    // Check for a button press
-    GPIO_Value_Type newButtonState;
-    int result = GPIO_GetValue(buttonAGpioFd, &newButtonState);
-    if (result != 0) {
-        Log_Debug("ERROR: Could not read button GPIO: %s (%d).\n", strerror(errno), errno);
-        terminationRequired = true;
-        return;
-    }
+	// Check for a button press
+	GPIO_Value_Type newButtonState;
+	int result = GPIO_GetValue(buttonAGpioFd, &newButtonState);
+	if (result != 0) {
+		Log_Debug("ERROR: Could not read button GPIO: %s (%d).\n", strerror(errno), errno);
+		terminationRequired = true;
+		return;
+	}
 
-    // The button has just been pressed, feed the prerecorded data into the predictor.
-    // The button has GPIO_Value_Low when pressed and GPIO_Value_High when released
-    if (newButtonState != buttonState) {
-        if (newButtonState == GPIO_Value_Low) {
+	// The button has just been pressed, feed the prerecorded data into the predictor.
+	// The button has GPIO_Value_Low when pressed and GPIO_Value_High when released
+	if (newButtonState != buttonState) {
+		if (newButtonState == GPIO_Value_Low) {
 			SimulateEvent();
-        }
-        buttonState = newButtonState;
-    }
+		}
+		buttonState = newButtonState;
+	}
 }
 
 
@@ -113,11 +112,11 @@ static void handle_prediction(int prediction, float confidence) {
 			bool success = construct_event_message(event_string,
 				sizeof(event_string), categories[prediction], confidence);
 			if (success) {
-				SendTelemetry(event_string);
+				send_telemetry(event_string);
 				save_event(event_string);
 				char history_string[EVENT_HISTORY_BYTE_SIZE];
 				construct_history_message(history_string, sizeof(history_string));
-				if (!UpdateDeviceTwin((unsigned char*)history_string)) {
+				if (!update_device_twin((unsigned char*)history_string)) {
 					Log_Debug("ERROR: failed to set reported state for eventHistory.\n");
 				}
 				else {
@@ -132,7 +131,7 @@ static void handle_prediction(int prediction, float confidence) {
 /// <summary>
 ///     Handle new audio event: a new audio frame has been recorded so process it.
 /// </summary>
-static void NewAudioEventHandler(EventData* eventData)
+static void AudioEventHandler(EventData* eventData)
 {
 	if (ConsumeTimerFdEvent(audioData.dataAvailableFd) != 0) {
 		terminationRequired = true;
@@ -153,7 +152,7 @@ static void NewAudioEventHandler(EventData* eventData)
 
 	// Read the next frame of data
 	float featurizer_input[AUDIO_FRAME_SIZE];
-	bool readResult = readAudioBuffer(&audioData, featurizer_input, AUDIO_FRAME_SIZE);
+	bool readResult = read_audio_buffer(&audioData, featurizer_input, AUDIO_FRAME_SIZE);
 	if (use_prerecorded) {
 		use_prerecorded = prepare_prerecorded(featurizer_input);
 		if (!use_prerecorded) {
@@ -184,12 +183,12 @@ static void AzureTimerEventHandler(EventData* eventData)
 		return;
 	}
 
-	IoTHubUpdate(TwinCallback, DirectMethodCallback);
+	iot_hub_update(TwinCallback, DirectMethodCallback);
 }
 
 // Event handler data structures. Only the event handler field needs to be populated.
-static EventData buttonEventData = {.eventHandler = &ButtonTimerEventHandler};
-static EventData audioEventData = { .eventHandler = &NewAudioEventHandler };
+static EventData buttonEventData = { .eventHandler = &ButtonTimerEventHandler };
+static EventData audioEventData = { .eventHandler = &AudioEventHandler };
 static EventData azureEventData = { .eventHandler = &AzureTimerEventHandler };
 
 /// <summary>
@@ -198,47 +197,48 @@ static EventData azureEventData = { .eventHandler = &AzureTimerEventHandler };
 /// <returns>0 on success, or -1 on failure</returns>
 static int InitPeripheralsAndHandlers(void)
 {
-    struct sigaction action;
-    memset(&action, 0, sizeof(struct sigaction));
-    action.sa_handler = TerminationHandler;
-    sigaction(SIGTERM, &action, NULL);
+	struct sigaction action;
+	memset(&action, 0, sizeof(struct sigaction));
+	action.sa_handler = TerminationHandler;
+	sigaction(SIGTERM, &action, NULL);
 
-    epollFd = CreateEpollFd();
-    if (epollFd < 0) {
-        return -1;
-    }
+	epollFd = CreateEpollFd();
+	if (epollFd < 0) {
+		return -1;
+	}
 
-    // Open button GPIO as input, and set up a timer to poll it
-    buttonAGpioFd = GPIO_OpenAsInput(BUTTON_A);
-    if (buttonAGpioFd < 0) {
-        Log_Debug("ERROR: Could not open button GPIO: %s (%d).\n", strerror(errno), errno);
-        return -1;
-    }
+	// Open button GPIO as input, and set up a timer to poll it
+	buttonAGpioFd = GPIO_OpenAsInput(BUTTON_A);
+	if (buttonAGpioFd < 0) {
+		Log_Debug("ERROR: Could not open button GPIO: %s (%d).\n", strerror(errno), errno);
+		return -1;
+	}
 
 	// Create a timer to check if the button was pressed
-    struct timespec buttonPressCheckPeriod = {0, 1000000};
-    buttonPollTimerFd =
-        CreateTimerFdAndAddToEpoll(epollFd, &buttonPressCheckPeriod, &buttonEventData, EPOLLIN);
-    if (buttonPollTimerFd < 0) {
-        return -1;
-    }
+	struct timespec buttonPressCheckPeriod = { 0, 1000000 };
+	buttonPollTimerFd =
+		CreateTimerFdAndAddToEpoll(epollFd, &buttonPressCheckPeriod, &buttonEventData, EPOLLIN);
+	if (buttonPollTimerFd < 0) {
+		return -1;
+	}
 
 	// Register the file descriptor which specifies if there is new data
 	clock_gettime(CLOCK_REALTIME, &lastDebugCheck);
 	clock_gettime(CLOCK_REALTIME, &lastPredictionTime);
-	int result = RegisterEventHandlerToEpoll(epollFd, audioData.dataAvailableFd, &audioEventData, EPOLLIN);
+	int result = RegisterEventHandlerToEpoll(
+		epollFd, audioData.dataAvailableFd, &audioEventData, EPOLLIN);
 	if (result < 0) {
 		return -1;
 	}
 
-	struct timespec azureProcessPeriod = { AzureIoTDefaultPollPeriodSeconds, 0 };
+	struct timespec azureProcessPeriod = { IOT_DEFAULT_POLL_PERIOD, 0 };
 	azureTimerFd =
 		CreateTimerFdAndAddToEpoll(epollFd, &azureProcessPeriod, &azureEventData, EPOLLIN);
 	if (azureTimerFd < 0) {
 		return -1;
 	}
 
-    return 0;
+	return 0;
 }
 
 /// <summary>
@@ -246,23 +246,23 @@ static int InitPeripheralsAndHandlers(void)
 /// </summary>
 static void ClosePeripheralsAndHandlers(void)
 {
-    Log_Debug("Closing file descriptors.\n");
+	Log_Debug("Closing file descriptors.\n");
 	CloseFdAndPrintError(azureTimerFd, "AzureTimer");
-    CloseFdAndPrintError(buttonPollTimerFd, "ButtonPollTimer");
+	CloseFdAndPrintError(buttonPollTimerFd, "ButtonPollTimer");
 	CloseFdAndPrintError(buttonAGpioFd, "ButtonAGPIO");
 	CloseFdAndPrintError(audioData.dataAvailableFd, "AudioDataAvailable");
-    CloseFdAndPrintError(epollFd, "Epoll");
+	CloseFdAndPrintError(epollFd, "Epoll");
 }
 
 /// <summary>
 ///     Main entry point for this application.
 /// </summary>
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
 	pthread_t tid;
-    Log_Debug("Application starting.\n");
+	Log_Debug("Application starting.\n");
 
-	if (!initializeAudioBuffer(&audioData)) {
+	if (!initialize_audio_buffer(&audioData)) {
 		Log_Debug("Failed to initialize the audio buffer.\n");
 		terminationRequired = true;
 	}
@@ -274,25 +274,26 @@ int main(int argc, char *argv[])
 
 	initialize_event_history();
 
-    if (!terminationRequired && InitPeripheralsAndHandlers() != 0) {
+	if (!terminationRequired && InitPeripheralsAndHandlers() != 0) {
 		Log_Debug("Initialization of peripherals failed.\n");
 		terminationRequired = true;
-    }
+	}
 
-	if (!terminationRequired && pthread_create(&tid, NULL, record_audio_thread, (void*)&audioData) != 0) {
+	if (!terminationRequired
+		&& pthread_create(&tid, NULL, record_audio_thread, (void*)&audioData) != 0) {
 		Log_Debug("Microphone record thread creation failed.");
 		terminationRequired = true;
 	}
 
-    // Use epoll to wait for events and trigger handlers, until an error or SIGTERM happens
-    while (!terminationRequired) {
+	// Use epoll to wait for events and trigger handlers, until an error or SIGTERM happens
+	while (!terminationRequired) {
 		terminationRequired = WaitForEventAndCallHandler(epollFd) != 0;
-    }
+	}
 
-    ClosePeripheralsAndHandlers();
+	ClosePeripheralsAndHandlers();
 	pthread_join(tid, NULL);
-    Log_Debug("Application exiting.\n");
-    return 0;
+	Log_Debug("Application exiting.\n");
+	return 0;
 }
 
 /// <summary>
@@ -339,37 +340,13 @@ static void TwinCallback(DEVICE_TWIN_UPDATE_STATE updateState, const unsigned ch
 		else {
 			Log_Debug("Disarming the security system.\n");
 		}
-		TwinReportBoolState("armed", isArmed);
+		update_device_twin_bool("armed", isArmed);
 	}
 
 cleanup:
 	// Release the allocated memory.
 	json_value_free(rootProperties);
 	free(nullTerminatedJsonString);
-}
-
-/// <summary>
-///     Sends an update to the device twin.
-/// </summary>
-/// <param name="propertyName">the IoT Hub Device Twin property name</param>
-/// <param name="propertyValue">the IoT Hub Device Twin property value</param>
-static void TwinReportBoolState(const char* propertyName, bool propertyValue)
-{
-	static char reportedPropertiesString[30] = { 0 };
-	int len = snprintf(reportedPropertiesString, 30, "{\"%s\":%s}", propertyName,
-		(propertyValue == true ? "true" : "false"));
-	if (len < 0) {
-		Log_Debug("ERROR: Couldn't create string for TwinReportBoolState.\n");
-		return;
-	}
-
-	if (!UpdateDeviceTwin((unsigned char*)reportedPropertiesString)) {
-		Log_Debug("ERROR: failed to set reported state for '%s'.\n", propertyName);
-	}
-	else {
-		Log_Debug("INFO: Reported state for '%s' to value '%s'.\n", propertyName,
-			(propertyValue == true ? "true" : "false"));
-	}
 }
 
 /// <summary>

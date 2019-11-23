@@ -13,7 +13,7 @@ extern volatile sig_atomic_t terminationRequired;
 
 /// <summary>
 /// Contains up to MAX_BUFFERS audio data chunks of AUDIO_FRAME_SIZE.
-/// Use readAudioBuffer and writeAudioBuffer functions to manipulate these structs.
+/// Use read_audio_buffer and write_audio_buffer functions to manipulate these structs.
 /// </summary>
 typedef struct AudioBuffer {
 	float buffers[MAX_BUFFERS][AUDIO_FRAME_SIZE];
@@ -31,7 +31,7 @@ typedef struct AudioBuffer {
 /// </summary>
 /// <param name="buf">AudioBuffer to initialize.</param>
 /// <returns>True if successful, false otherwise.</returns>
-bool initializeAudioBuffer(AudioBuffer* buf);
+bool initialize_audio_buffer(AudioBuffer* buf);
 
 /// <summary>
 ///     Copies the data in srcData into the write buffer in buf.
@@ -40,12 +40,14 @@ bool initializeAudioBuffer(AudioBuffer* buf);
 /// <param name="srcData">Data to copy into the write buffer.</param>
 /// <param name="srcSize">Length of srcData.</param>
 /// <returns>True if successful, false otherwise.</returns>
-bool writeAudioBuffer(AudioBuffer* buf, float* srcData, unsigned short srcSize);
+bool write_audio_buffer(AudioBuffer* buf, float* srcData, unsigned short srcSize);
 
 /// <summary>
-///     Increments read_index and returns a pointer to the read buffer.
+///     Increments read_index and copies the next data frame into destBuf.
 /// </summary>
 /// <param name="buf">AudioBuffer to use.</param>
+///	<param name="destBuf">Plain float array to write the next frame into.</param>
+/// <param name="destSize">Size of destBuf in bytes.</param>
 /// <returns>Pointer to read buffer.</returns>
-bool readAudioBuffer(AudioBuffer* buf, float* destBuf, unsigned short destSize);
+bool read_audio_buffer(AudioBuffer* buf, float* destBuf, unsigned short destSize);
 

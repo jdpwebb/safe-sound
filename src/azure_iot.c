@@ -14,19 +14,24 @@
 // Scope ID from Azure IoT Hub
 static char scopeId[] = "XXXXXXXXXXX";
 
-const int AzureIoTDefaultPollPeriodSeconds = 5;
+const int IOT_DEFAULT_POLL_PERIOD = 5;
 
 // Azure IoT Hub variables
 static IOTHUB_DEVICE_CLIENT_LL_HANDLE iothubClientHandle = NULL;
 static const int keepalivePeriodSeconds = 20;
 static bool iothubAuthenticated = false;
 
-// Azure IoT poll periods
+// Azure IoT check setup periods
 static const int AzureIoTMinReconnectPeriodSeconds = 60;
 static const int AzureIoTMaxReconnectPeriodSeconds = 10 * 60;
 
-static int azureIoTPollPeriodSeconds = AzureIoTDefaultPollPeriodSeconds;
+static int azureIoTPollPeriodSeconds = IOT_DEFAULT_POLL_PERIOD;
 static struct timespec lastReconnectTry = { 0, 0 };
+
+static const char* get_reason_string(IOTHUB_CLIENT_CONNECTION_STATUS_REASON reason);
+static const char* get_azure_sphere_provisioning_result_string(
+	AZURE_SPHERE_PROV_RETURN_VALUE provisioningResult
+);
 
 /// <summary>
 ///     Sets the IoT Hub authentication state for the app
@@ -37,7 +42,7 @@ static void HubConnectionStatusCallback(IOTHUB_CLIENT_CONNECTION_STATUS result,
 	void* userContextCallback)
 {
 	iothubAuthenticated = (result == IOTHUB_CLIENT_CONNECTION_AUTHENTICATED);
-	Log_Debug("IoT Hub Authenticated: %s\n", GetReasonString(reason));
+	Log_Debug("IoT Hub Authenticated: %s\n", get_reason_string(reason));
 }
 
 /// <summary>
@@ -53,7 +58,7 @@ static void HubConnectionStatusCallback(IOTHUB_CLIENT_CONNECTION_STATUS result,
 ///		True if setting up or refreshing the SAS Token was successful.
 ///		False if it isn't time to reconnect, or the reconnection failed.
 ///	</returns>
-bool SetupAzureClient(IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK twin_callback,
+bool setup_hub_client(IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK twin_callback,
 	IOTHUB_CLIENT_DEVICE_METHOD_CALLBACK_ASYNC direct_method_callback
 	)
 {
@@ -73,14 +78,14 @@ bool SetupAzureClient(IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK twin_callback,
 		IoTHubDeviceClient_LL_CreateWithAzureSphereDeviceAuthProvisioning(scopeId, 10000,
 			&iothubClientHandle);
 	Log_Debug("IoTHubDeviceClient_LL_CreateWithAzureSphereDeviceAuthProvisioning returned '%s'.\n",
-		getAzureSphereProvisioningResultString(provResult));
+		get_azure_sphere_provisioning_result_string(provResult));
 
 	if (provResult.result != AZURE_SPHERE_PROV_RESULT_OK) {
 
 		// If we fail to connect, reduce the polling frequency, starting at
 		// AzureIoTMinReconnectPeriodSeconds and with a backoff up to
 		// AzureIoTMaxReconnectPeriodSeconds
-		if (azureIoTPollPeriodSeconds == AzureIoTDefaultPollPeriodSeconds) {
+		if (azureIoTPollPeriodSeconds == IOT_DEFAULT_POLL_PERIOD) {
 			azureIoTPollPeriodSeconds = AzureIoTMinReconnectPeriodSeconds;
 		}
 		else {
@@ -96,7 +101,7 @@ bool SetupAzureClient(IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK twin_callback,
 	}
 
 	// Successfully connected, so make sure the polling frequency is back to the default
-	azureIoTPollPeriodSeconds = AzureIoTDefaultPollPeriodSeconds;
+	azureIoTPollPeriodSeconds = IOT_DEFAULT_POLL_PERIOD;
 
 	iothubAuthenticated = true;
 
@@ -114,12 +119,12 @@ bool SetupAzureClient(IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK twin_callback,
 	return true;
 }
 
-void IoTHubUpdate(IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK twin_callback,
+void iot_hub_update(IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK twin_callback,
 	IOTHUB_CLIENT_DEVICE_METHOD_CALLBACK_ASYNC direct_method_callback) {
 	bool isNetworkReady = false;
 	if (Networking_IsNetworkingReady(&isNetworkReady) != -1) {
 		if (isNetworkReady && !iothubAuthenticated) {
-			SetupAzureClient(twin_callback, direct_method_callback);
+			setup_hub_client(twin_callback, direct_method_callback);
 		}
 	}
 	else {
@@ -136,7 +141,7 @@ void IoTHubUpdate(IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK twin_callback,
 /// </summary>
 /// <param name="key">The telemetry item to update</param>
 /// <param name="value">new telemetry value</param>
-void SendTelemetry(const char* eventBuffer)
+void send_telemetry(const char* eventBuffer)
 {
 	Log_Debug("Sending IoT Hub Message: %s\n", eventBuffer);
 
@@ -158,8 +163,8 @@ void SendTelemetry(const char* eventBuffer)
 	IoTHubMessage_Destroy(messageHandle);
 }
 
-bool UpdateDeviceTwin(unsigned char* new_state) {
-	if (!isHubAuthenticated()) {
+bool update_device_twin(unsigned char* new_state) {
+	if (!is_hub_authenticated()) {
 		Log_Debug("Client not authenticated.\n");
 		return false;
 	}
@@ -169,9 +174,33 @@ bool UpdateDeviceTwin(unsigned char* new_state) {
 }
 
 /// <summary>
+///     Sends an update to the device twin.
+/// </summary>
+/// <param name="propertyName">the IoT Hub Device Twin property name</param>
+/// <param name="propertyValue">the IoT Hub Device Twin property value</param>
+void update_device_twin_bool(const char* propertyName, bool propertyValue)
+{
+	static char reportedPropertiesString[30] = { 0 };
+	int len = snprintf(reportedPropertiesString, 30, "{\"%s\":%s}", propertyName,
+		(propertyValue == true ? "true" : "false"));
+	if (len < 0) {
+		Log_Debug("ERROR: Couldn't create string for TwinReportBoolState.\n");
+		return;
+	}
+
+	if (!update_device_twin((unsigned char*)reportedPropertiesString)) {
+		Log_Debug("ERROR: failed to set reported state for '%s'.\n", propertyName);
+	}
+	else {
+		Log_Debug("INFO: Reported state for '%s' to value '%s'.\n", propertyName,
+			(propertyValue == true ? "true" : "false"));
+	}
+}
+
+/// <summary>
 ///     Converts the IoT Hub connection status reason to a string.
 /// </summary>
-const char* GetReasonString(IOTHUB_CLIENT_CONNECTION_STATUS_REASON reason)
+static const char* get_reason_string(IOTHUB_CLIENT_CONNECTION_STATUS_REASON reason)
 {
 	static char* reasonString = "unknown reason";
 	switch (reason) {
@@ -203,7 +232,7 @@ const char* GetReasonString(IOTHUB_CLIENT_CONNECTION_STATUS_REASON reason)
 /// <summary>
 ///     Converts AZURE_SPHERE_PROV_RETURN_VALUE to a string.
 /// </summary>
-const char* getAzureSphereProvisioningResultString(
+static const char* get_azure_sphere_provisioning_result_string(
 	AZURE_SPHERE_PROV_RETURN_VALUE provisioningResult)
 {
 	switch (provisioningResult.result) {
@@ -228,6 +257,6 @@ const char* getAzureSphereProvisioningResultString(
 ///		Allows querying for the current authentication status.
 /// </summary>
 /// <returns>True if the IoT Hub has been successfully authenticated, false otherwise.</returns>
-bool isHubAuthenticated() {
+bool is_hub_authenticated() {
 	return iothubAuthenticated;
 }

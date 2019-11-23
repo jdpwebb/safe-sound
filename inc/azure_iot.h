@@ -4,7 +4,7 @@
 #include <iothub_client_core_common.h>
 #include <azure_sphere_provisioning.h>
 
-extern const int AzureIoTDefaultPollPeriodSeconds;
+extern const int IOT_DEFAULT_POLL_PERIOD;
 
 /// <summary>
 ///     Sets up the Azure IoT Hub connection (creates the iothubClientHandle)
@@ -19,51 +19,47 @@ extern const int AzureIoTDefaultPollPeriodSeconds;
 ///		True if setting up or refreshing the SAS Token was successful.
 ///		False if it isn't time to reconnect, or the reconnection failed.
 ///	</returns>
-bool SetupAzureClient(IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK twin_callback,
+bool setup_hub_client(IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK twin_callback,
 	IOTHUB_CLIENT_DEVICE_METHOD_CALLBACK_ASYNC direct_method_callback
 );
 
 /// <summary>
-///		Handles all the functionality necessary to ensuring communication with the IoT Hub stays active,
-///		including refreshing authentication when necessary, calling callbacks when there is an update
-///		from the hub.
+///		Handles all the functionality necessary to ensuring communication with the IoT Hub
+///		stays active, including refreshing authentication when necessary, calling callbacks
+///		when there is an update	from the hub.
 ///
-///		It should be called at least AzureIoTDefaultPollPeriodSeconds frequently.
+///		It should be called at least IOT_DEFAULT_POLL_PERIOD frequently.
 /// </summary>
 /// <param name="twin_callback">Function called when a device twin update is received.</param>
 /// <param name="direct_method_callback">Function called when a direct method request is received.</param>
-void IoTHubUpdate(IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK twin_callback,
+void iot_hub_update(IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK twin_callback,
 	IOTHUB_CLIENT_DEVICE_METHOD_CALLBACK_ASYNC direct_method_callback);
 
 /// <summary>
 ///     Sends telemetry to IoT Hub
 /// </summary>
-/// <param name="key">The telemetry item to update</param>
-/// <param name="value">new telemetry value</param>
-void SendTelemetry(const char* data);
+/// <param name="data">Telemetry string to send.</param>
+void send_telemetry(const char* data);
 
 /// <summary>
-///		Creates and enqueues a report containing the name and value pair of a Device Twin reported
-///     property. The report is not sent immediately, but it is sent on the next invocation of
-///     IoTHubDeviceClient_LL_DoWork().
+///		Creates and enqueues an update to the Device Twin as a series of key-value properties
+///     stored in the new_state string.
+///		The report is not sent immediately, but it is sent on the next invocation of
+///     iot_hub_update().
 ///	</summary>
 /// <param name="new_state">The state updates as a string of a key-value pair.</param>
 ///	<returns>True if the operation is successful, false otherwise.</returns>
-bool UpdateDeviceTwin(unsigned char* new_state);
+bool update_device_twin(unsigned char* new_state);
 
 /// <summary>
-///     Converts the IoT Hub connection status reason to a string.
+///     Sends an update to the device twin.
 /// </summary>
-const char* GetReasonString(IOTHUB_CLIENT_CONNECTION_STATUS_REASON reason);
-
-///     Converts AZURE_SPHERE_PROV_RETURN_VALUE to a string.
-/// </summary>
-const char* getAzureSphereProvisioningResultString(
-	AZURE_SPHERE_PROV_RETURN_VALUE provisioningResult
-);
+/// <param name="propertyName">The IoT Hub Device Twin property name.</param>
+/// <param name="propertyValue">The IoT Hub Device Twin property value.</param>
+void update_device_twin_bool(const char* propertyName, bool propertyValue);
 
 /// <summary>
 ///		Allows querying for the current authentication status.
 /// </summary>
 /// <returns>True if the IoT Hub has been successfully authenticated, false otherwise.</returns>
-bool isHubAuthenticated(void);
+bool is_hub_authenticated(void);

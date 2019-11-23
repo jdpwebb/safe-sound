@@ -49,7 +49,7 @@ static void MicrophoneRecordEventHandler(EventData* eventData)
 	if (++audioBufferIndex == AUDIO_FRAME_SIZE) {
 		audioBufferIndex = 0;
 		// copy full raw buffer into audio buffers
-		if (!writeAudioBuffer(audioBuf, rawAudioBuffer, AUDIO_FRAME_SIZE)) {
+		if (!write_audio_buffer(audioBuf, rawAudioBuffer, AUDIO_FRAME_SIZE)) {
 			audioBuf->dropped_frames += 1;
 		}
 		else {
