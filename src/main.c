@@ -1,4 +1,4 @@
-﻿#include <errno.h>
+#include <errno.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -21,9 +21,7 @@
 #include "record_audio.h"
 #include "process_audio.h"
 #include "azure_iot.h"
-
-#define EVENT_HISTORY_SIZE 3
-#define EVENT_STRING_SIZE 85
+#include "event_utilities.h"
 
 static void TwinCallback(DEVICE_TWIN_UPDATE_STATE updateState, const unsigned char* payload,
 	size_t payloadSize, void* userContextCallback);
@@ -54,10 +52,6 @@ static bool use_prerecorded = false;
 
 // general settings variables
 static bool isArmed = true;
-static char event_history[EVENT_HISTORY_SIZE][EVENT_STRING_SIZE];
-static size_t event_history_index = 0;
-static const char historyFormatBegin[] = "{\"eventHistory\":{";
-static const char historyFormatEnd[] = "}}";
 
 /// <summary>
 ///     Signal handler for termination requests. This handler must be async-signal-safe.
@@ -106,57 +100,7 @@ static void ButtonTimerEventHandler(EventData *eventData)
     }
 }
 
-static void initialize_event_history(void) {
-	for (size_t i = 0; i < EVENT_HISTORY_SIZE; ++i) {
-		strcpy(event_history[i], "");
-	}
-}
 
-static void save_event(const char* event_string) {
-	strncpy(event_history[event_history_index], event_string, EVENT_STRING_SIZE);
-	event_history_index = (event_history_index + 1) % EVENT_HISTORY_SIZE;
-}
-
-static bool construct_event_message(char* buffer, size_t buf_size, const char* event_type, float confidence) {
-	const char* EventMsgTemplate = "{\"eventType\":\"%s\",\"confidence\":%1.2f,\"eventTime\":%d}";
-	struct timespec currentTime;
-	clock_gettime(CLOCK_REALTIME, &currentTime);
-	int len = snprintf(buffer, buf_size, EventMsgTemplate, event_type, confidence, currentTime.tv_sec);
-	return len > 0;
-}
-
-static bool construct_history_message(char* buffer, size_t buf_size) {
-	// Ensure the given buffer is big enough.
-	// Add enough size for each string plus comma (',') and key number ("0":)
-	if (buf_size < (EVENT_STRING_SIZE + 5) * EVENT_HISTORY_SIZE + sizeof(historyFormatBegin) + sizeof(historyFormatEnd)) {
-		return false;
-	}
-	strcpy(buffer, historyFormatBegin);
-	size_t string_index = sizeof(historyFormatBegin) - 1;
-	// Copy each string from the event_history into the buffer
-	// Start with the most recent event and then add older events
-	size_t i = (event_history_index - 1 + EVENT_HISTORY_SIZE) % EVENT_HISTORY_SIZE;
-	size_t event_key = 0;
-	size_t count_processed = 0;
-	while (count_processed < EVENT_HISTORY_SIZE) {
-		++count_processed;
-		if (strcmp(event_history[i], "") == 0) {
-			// empty event so skip this one
-			i = (i - 1 + EVENT_HISTORY_SIZE) % EVENT_HISTORY_SIZE;
-			continue;
-		}
-		int len = snprintf(buffer + string_index, 5, "\"%d\":", event_key);
-		string_index += 4;
-		strcpy(buffer+string_index, event_history[i]);
-		string_index += strlen(event_history[i]);
-		buffer[string_index++] = ',';  // append comma
-		++event_key;
-		i = (i - 1 + EVENT_HISTORY_SIZE) % EVENT_HISTORY_SIZE;
-	}
-	--string_index;  // remove last comma
-	strcpy(buffer+string_index, historyFormatEnd);
-	return true;
-}
 
 static void handle_prediction(int prediction, float confidence) {
 	// check if the cooloff period has ended
@@ -171,8 +115,7 @@ static void handle_prediction(int prediction, float confidence) {
 			if (success) {
 				SendTelemetry(event_string);
 				save_event(event_string);
-				char history_string[(EVENT_STRING_SIZE + 5)* EVENT_HISTORY_SIZE 
-					+ sizeof(historyFormatBegin) + sizeof(historyFormatEnd)];
+				char history_string[EVENT_HISTORY_BYTE_SIZE];
 				construct_history_message(history_string, sizeof(history_string));
 				if (!UpdateDeviceTwin((unsigned char*)history_string)) {
 					Log_Debug("ERROR: failed to set reported state for eventHistory.\n");
