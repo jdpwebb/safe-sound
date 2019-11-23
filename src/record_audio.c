@@ -37,7 +37,7 @@ static void MicrophoneRecordEventHandler(EventData* eventData)
 	uint32_t value;
 	int result = ADC_Poll(adcControllerFd, MICROPHONE, &value);
 	if (result < -1) {
-		Log_Debug("ADC_Poll failed with error: %s (%d)\n", strerror(errno), errno);
+		Log_Debug("ERROR: ADC_Poll failed with error: %s (%d)\n", strerror(errno), errno);
 		terminationRequired = true;
 		return;
 	}
@@ -68,31 +68,32 @@ struct EventData adcPollingEventData = { .eventHandler = &MicrophoneRecordEventH
 ///     Opens and initializes ADC channel 1 (which has the microphone attached),
 ///     and creates an event handler to measure the ADC value periodically.
 /// </summary>
-static int initMicrophone(void) {
+static int InitMicrophone(void)
+{
 	// create a separate epoll to avoid waking up main thread
 	threadEpollFd = CreateEpollFd();
 	if (threadEpollFd < 0) {
-		Log_Debug("Thread epoll error.\n");
+		Log_Debug("ERROR: Thread epoll error.\n");
 		return -1;
 	}
 
-	Log_Debug("Opening ADC Controller.\n");
+	Log_Debug("INFO: Opening ADC Controller.\n");
 	adcControllerFd = ADC_Open(MICROPHONE_CONTROLLER);
 	if (adcControllerFd < 0) {
-		Log_Debug("ADC_Open failed with error: %s (%d)\n", strerror(errno), errno);
+		Log_Debug("ERROR: ADC_Open failed with error: %s (%d)\n", strerror(errno), errno);
 		return -1;
 	}
 
 	adcBitCount = ADC_GetSampleBitCount(adcControllerFd, MICROPHONE);
 	if (adcBitCount == -1) {
-		Log_Debug("ADC_GetSampleBitCount failed with error : %s (%d)\n", strerror(errno), errno);
+		Log_Debug("ERROR: ADC_GetSampleBitCount failed with error : %s (%d)\n", strerror(errno), errno);
 		return -1;
 	}
 	if (adcBitCount == 0) {
-		Log_Debug("ADC_GetSampleBitCount returned sample size of 0 bits.\n");
+		Log_Debug("ERROR: ADC_GetSampleBitCount returned sample size of 0 bits.\n");
 		return -1;
 	}
-	Log_Debug("ADC sample bit count: %d.\n", adcBitCount);
+	Log_Debug("INFO: ADC sample bit count: %d.\n", adcBitCount);
 
 	// record an audio sample every 1sec/AUDIO_SAMPLE_RATE = 1000000000ns/AUDIO_SAMPLE_RATE
 	struct timespec adcCheckPeriod = { .tv_nsec = 1000000000 / AUDIO_SAMPLE_RATE};
@@ -109,8 +110,9 @@ static int initMicrophone(void) {
 /// <summary>
 ///    Closes all file descriptors opened in this thread
 /// </summary>
-static void closeFileDescriptors(void) {
-	Log_Debug("Closing record audio thread file descriptors.\n");
+static void CloseFileDescriptors(void)
+{
+	Log_Debug("INFO: Closing record audio thread file descriptors.\n");
 	CloseFdAndPrintError(microphonePollTimerFd, "ADCTimer");
 	CloseFdAndPrintError(adcControllerFd, "ADC");
 	CloseFdAndPrintError(threadEpollFd, "ThreadEpoll");
@@ -122,12 +124,13 @@ static void closeFileDescriptors(void) {
 /// </summary>
 /// <param name="vargp">Variable arguments; currently unused</param>
 /// <returns>NULL</returns>
-void* record_audio_thread(void* vargp) {
-	Log_Debug("Starting record audio thread.\n");
+void* RecordAudioThread(void* vargp)
+{
+	Log_Debug("INFO: Starting record audio thread.\n");
 
 	audioBuf = (AudioBuffer*)vargp;
 
-	if (initMicrophone() != 0) {
+	if (InitMicrophone() != 0) {
 		terminationRequired = true;
 	}
 
@@ -137,6 +140,6 @@ void* record_audio_thread(void* vargp) {
 		}
 	}
 
-	closeFileDescriptors();
+	CloseFileDescriptors();
 	return NULL;
 }

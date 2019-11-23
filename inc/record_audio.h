@@ -6,4 +6,4 @@
 /// </summary>
 /// <param name="vargp">Used to pass the AudioBuffer struct.</param>
 /// <returns>NULL</returns>
-void* record_audio_thread(void* vargp);
+void* RecordAudioThread(void* vargp);

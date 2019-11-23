@@ -3,7 +3,9 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+// Added to the beginning of the history message
 static const char HISTORY_FORMAT_BEGIN[] = "{\"eventHistory\":{";
+// Added to the end of the history message
 static const char HISTORY_FORMAT_END[] = "}}";
 
 #define EVENT_HISTORY_SIZE 3  // number of events to keep

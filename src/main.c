@@ -16,6 +16,7 @@
 
 #include "parson.h" // used to parse Device Twin messages.
 
+// project-specific header files
 #include "hw/safe_sound_hardware.h"
 #include "common.h"
 #include "record_audio.h"
@@ -23,14 +24,21 @@
 #include "azure_iot.h"
 #include "event_utilities.h"
 
+// This application uses machine learning to classify audio continuously.
+
+// Forward declaration of functions
+static int InitializeApp(void);
+static int InitPeripheralsAndHandlers(void);
+static void ClosePeripheralsAndHandlers(void);
+static void ButtonTimerEventHandler(EventData* eventData);
+static void AudioEventHandler(EventData* eventData);
+static void AzureTimerEventHandler(EventData* eventData);
+static void SimulateEvent(void);
+static void HandlePrediction(int prediction, float confidence);
 static void TwinCallback(DEVICE_TWIN_UPDATE_STATE updateState, const unsigned char* payload,
 	size_t payloadSize, void* userContextCallback);
 static int DirectMethodCallback(const char* method_name, const unsigned char* payload,
 	size_t size, unsigned char** response, size_t* response_size, void* userContextCallback);
-
-static void AzureTimerEventHandler(EventData* eventData);
-
-// This application uses machine learning to classify audio continuously.
 
 // File descriptors - initialized to invalid value
 static int buttonAGpioFd = -1;
@@ -42,15 +50,51 @@ static int epollFd = -1;
 static GPIO_Value_Type buttonState = GPIO_Value_High;
 
 // Audio variables
-const float confidence_thresh = 0.95f;
+const float confidenceThresh = 0.95f;
 AudioBuffer audioData;
 const short debugAudioPeriod = 5;  // print debug info every 5 seconds
 const short predictionCooloff = 5;  // only allow a prediction every 5 seconds
 static struct timespec lastDebugCheck, lastPredictionTime;
-static bool use_prerecorded = false;
+static bool usePrerecorded = false;  // Specifies whether to use prerecorded audio
 
-// general settings variables
-static bool isArmed = true;
+// General settings variables
+static bool isArmed = true;  // Whether a new event should be reported
+
+// Event handler data structures. Only the event handler field needs to be populated.
+static EventData buttonEventData = { .eventHandler = &ButtonTimerEventHandler };
+static EventData audioEventData = { .eventHandler = &AudioEventHandler };
+static EventData azureEventData = { .eventHandler = &AzureTimerEventHandler };
+
+/// <summary>
+///     Main entry point for this application.
+/// </summary>
+int main(int argc, char* argv[])
+{
+	pthread_t tid;
+	Log_Debug("INFO: Application starting.\n");
+
+	if (InitializeApp() < 0) {
+		terminationRequired = true;
+	}
+
+	// Start audio recording thread
+	if (!terminationRequired
+		&& pthread_create(&tid, NULL, RecordAudioThread, (void*)&audioData) != 0) {
+		Log_Debug("ERROR: Microphone record thread creation failed.");
+		terminationRequired = true;
+	}
+
+	// Use epoll to wait for events and trigger handlers, until an error or SIGTERM happens
+	while (!terminationRequired) {
+		terminationRequired = WaitForEventAndCallHandler(epollFd) != 0;
+	}
+
+	ClosePeripheralsAndHandlers();
+	// Wait for audio recording thread to finish
+	pthread_join(tid, NULL);
+	Log_Debug("INFO: Application exiting.\n");
+	return 0;
+}
 
 /// <summary>
 ///     Signal handler for termination requests. This handler must be async-signal-safe.
@@ -61,13 +105,94 @@ static void TerminationHandler(int signalNumber)
 	terminationRequired = true;
 }
 
+///	<summary>
+///		Initializes audio buffers, prediction models, event history and peripherals.
+///	</summary>
+///	<returns>0 on success, -1 on failure</returns>
+static int InitializeApp(void)
+{
+	if (!initialize_audio_buffer(&audioData)) {
+		Log_Debug("ERROR: Failed to initialize the audio buffer.\n");
+		return -1;
+	}
+
+	if (!check_predict_setup()) {
+		Log_Debug("ERROR: Prediction setup failed.\n");
+		return -1;
+	}
+
+	initialize_event_history();
+
+	if (InitPeripheralsAndHandlers() != 0) {
+		Log_Debug("ERROR: Initialization of peripherals failed.\n");
+		return -1;
+	}
+
+	return 0;
+}
+
 /// <summary>
-///		Simulates an event by feeding the prerecorded audio into the classifier.
+///     Set up SIGTERM termination handler, initialize peripherals, and set up event handlers.
 /// </summary>
-static void SimulateEvent(void) {
-	prerecorded_reset();
-	predict_reset();
-	use_prerecorded = true;
+/// <returns>0 on success, or -1 on failure</returns>
+static int InitPeripheralsAndHandlers(void)
+{
+	// Register termination handler
+	struct sigaction action;
+	memset(&action, 0, sizeof(struct sigaction));
+	action.sa_handler = TerminationHandler;
+	sigaction(SIGTERM, &action, NULL);
+
+	epollFd = CreateEpollFd();
+	if (epollFd < 0) {
+		return -1;
+	}
+
+	// Open button GPIO as input, and set up a timer to poll it
+	buttonAGpioFd = GPIO_OpenAsInput(BUTTON_A);
+	if (buttonAGpioFd < 0) {
+		Log_Debug("ERROR: Could not open button GPIO: %s (%d).\n", strerror(errno), errno);
+		return -1;
+	}
+	// Create a timer to check if the button was pressed
+	struct timespec buttonPressCheckPeriod = { 0, 1000000 };
+	buttonPollTimerFd =
+		CreateTimerFdAndAddToEpoll(epollFd, &buttonPressCheckPeriod, &buttonEventData, EPOLLIN);
+	if (buttonPollTimerFd < 0) {
+		return -1;
+	}
+
+	// Register the file descriptor which specifies if there is new audio data to process
+	clock_gettime(CLOCK_REALTIME, &lastDebugCheck);
+	clock_gettime(CLOCK_REALTIME, &lastPredictionTime);
+	int result = RegisterEventHandlerToEpoll(
+		epollFd, audioData.dataAvailableFd, &audioEventData, EPOLLIN);
+	if (result < 0) {
+		return -1;
+	}
+
+	// Register Azure IoT Hub update handler which is called periodically
+	struct timespec azureProcessPeriod = { IOT_DEFAULT_POLL_PERIOD, 0 };
+	azureTimerFd =
+		CreateTimerFdAndAddToEpoll(epollFd, &azureProcessPeriod, &azureEventData, EPOLLIN);
+	if (azureTimerFd < 0) {
+		return -1;
+	}
+
+	return 0;
+}
+
+/// <summary>
+///     Close peripherals and handlers.
+/// </summary>
+static void ClosePeripheralsAndHandlers(void)
+{
+	Log_Debug("INFO: Closing file descriptors.\n");
+	CloseFdAndPrintError(azureTimerFd, "AzureTimer");
+	CloseFdAndPrintError(buttonPollTimerFd, "ButtonPollTimer");
+	CloseFdAndPrintError(buttonAGpioFd, "ButtonAGPIO");
+	CloseFdAndPrintError(audioData.dataAvailableFd, "AudioDataAvailable");
+	CloseFdAndPrintError(epollFd, "Epoll");
 }
 
 /// <summary>
@@ -99,35 +224,6 @@ static void ButtonTimerEventHandler(EventData* eventData)
 	}
 }
 
-
-
-static void handle_prediction(int prediction, float confidence) {
-	// check if the cooloff period has ended
-	struct timespec currentTime;
-	clock_gettime(CLOCK_REALTIME, &currentTime);
-	if (currentTime.tv_sec - lastPredictionTime.tv_sec > predictionCooloff && prediction != 0) {
-		Log_Debug("Prediction: %s with confidence %.2f\n", categories[prediction], confidence);
-		if (isArmed) {
-			char event_string[EVENT_STRING_SIZE] = { 0 };
-			bool success = construct_event_message(event_string,
-				sizeof(event_string), categories[prediction], confidence);
-			if (success) {
-				send_telemetry(event_string);
-				save_event(event_string);
-				char history_string[EVENT_HISTORY_BYTE_SIZE];
-				construct_history_message(history_string, sizeof(history_string));
-				if (!update_device_twin((unsigned char*)history_string)) {
-					Log_Debug("ERROR: failed to set reported state for eventHistory.\n");
-				}
-				else {
-					Log_Debug("INFO: Reported state for eventHistory accepted by IoTHubClient.\n");
-				}
-			}
-		}
-		lastPredictionTime = currentTime;
-	}
-}
-
 /// <summary>
 ///     Handle new audio event: a new audio frame has been recorded so process it.
 /// </summary>
@@ -143,7 +239,7 @@ static void AudioEventHandler(EventData* eventData)
 	clock_gettime(CLOCK_REALTIME, &currentTime);
 	if (currentTime.tv_sec - lastDebugCheck.tv_sec > debugAudioPeriod) {
 		if (audioData.dropped_frames > 0) {
-			Log_Debug("Dropped %d frames in last %d seconds.\n",
+			Log_Debug("WARNING: Dropped %d frames in last %d seconds.\n",
 				audioData.dropped_frames, currentTime.tv_sec - lastDebugCheck.tv_sec);
 			audioData.dropped_frames = 0;
 		}
@@ -153,9 +249,9 @@ static void AudioEventHandler(EventData* eventData)
 	// Read the next frame of data
 	float featurizer_input[AUDIO_FRAME_SIZE];
 	bool readResult = read_audio_buffer(&audioData, featurizer_input, AUDIO_FRAME_SIZE);
-	if (use_prerecorded) {
-		use_prerecorded = prepare_prerecorded(featurizer_input);
-		if (!use_prerecorded) {
+	if (usePrerecorded) {
+		usePrerecorded = prepare_prerecorded(featurizer_input);
+		if (!usePrerecorded) {
 			predict_reset();
 		}
 	}
@@ -168,13 +264,14 @@ static void AudioEventHandler(EventData* eventData)
 	float confidence;  // confidence in prediction (0.0 - 1.0)
 	predict_single_frame(featurizer_input, &prediction, &confidence);
 	float overall_confidence = smooth_prediction(prediction, confidence);
-	if (overall_confidence > confidence_thresh) {
-		handle_prediction(prediction, overall_confidence);
+	if (overall_confidence > confidenceThresh) {
+		// call prediction handler
+		HandlePrediction(prediction, overall_confidence);
 	}
 }
 
 /// <summary>
-/// Azure timer event:  Check connection status and send telemetry
+///		Azure timer event:  Check connection status and send telemetry
 /// </summary>
 static void AzureTimerEventHandler(EventData* eventData)
 {
@@ -186,122 +283,61 @@ static void AzureTimerEventHandler(EventData* eventData)
 	iot_hub_update(TwinCallback, DirectMethodCallback);
 }
 
-// Event handler data structures. Only the event handler field needs to be populated.
-static EventData buttonEventData = { .eventHandler = &ButtonTimerEventHandler };
-static EventData audioEventData = { .eventHandler = &AudioEventHandler };
-static EventData azureEventData = { .eventHandler = &AzureTimerEventHandler };
 
 /// <summary>
-///     Set up SIGTERM termination handler, initialize peripherals, and set up event handlers.
+///		Simulates an event by feeding the prerecorded audio into the classifier.
 /// </summary>
-/// <returns>0 on success, or -1 on failure</returns>
-static int InitPeripheralsAndHandlers(void)
+static void SimulateEvent(void)
 {
-	struct sigaction action;
-	memset(&action, 0, sizeof(struct sigaction));
-	action.sa_handler = TerminationHandler;
-	sigaction(SIGTERM, &action, NULL);
-
-	epollFd = CreateEpollFd();
-	if (epollFd < 0) {
-		return -1;
-	}
-
-	// Open button GPIO as input, and set up a timer to poll it
-	buttonAGpioFd = GPIO_OpenAsInput(BUTTON_A);
-	if (buttonAGpioFd < 0) {
-		Log_Debug("ERROR: Could not open button GPIO: %s (%d).\n", strerror(errno), errno);
-		return -1;
-	}
-
-	// Create a timer to check if the button was pressed
-	struct timespec buttonPressCheckPeriod = { 0, 1000000 };
-	buttonPollTimerFd =
-		CreateTimerFdAndAddToEpoll(epollFd, &buttonPressCheckPeriod, &buttonEventData, EPOLLIN);
-	if (buttonPollTimerFd < 0) {
-		return -1;
-	}
-
-	// Register the file descriptor which specifies if there is new data
-	clock_gettime(CLOCK_REALTIME, &lastDebugCheck);
-	clock_gettime(CLOCK_REALTIME, &lastPredictionTime);
-	int result = RegisterEventHandlerToEpoll(
-		epollFd, audioData.dataAvailableFd, &audioEventData, EPOLLIN);
-	if (result < 0) {
-		return -1;
-	}
-
-	struct timespec azureProcessPeriod = { IOT_DEFAULT_POLL_PERIOD, 0 };
-	azureTimerFd =
-		CreateTimerFdAndAddToEpoll(epollFd, &azureProcessPeriod, &azureEventData, EPOLLIN);
-	if (azureTimerFd < 0) {
-		return -1;
-	}
-
-	return 0;
+	prerecorded_reset();
+	predict_reset();
+	usePrerecorded = true;
 }
 
 /// <summary>
-///     Close peripherals and handlers.
+///		Processes new predictions by adding each event to the event history
+///		and notifying the IoT Hub.
 /// </summary>
-static void ClosePeripheralsAndHandlers(void)
+/// <param name="prediction">Prediction index</param>
+/// <param name="confidence">Confidence value (0 - 1)</param>
+static void HandlePrediction(int prediction, float confidence)
 {
-	Log_Debug("Closing file descriptors.\n");
-	CloseFdAndPrintError(azureTimerFd, "AzureTimer");
-	CloseFdAndPrintError(buttonPollTimerFd, "ButtonPollTimer");
-	CloseFdAndPrintError(buttonAGpioFd, "ButtonAGPIO");
-	CloseFdAndPrintError(audioData.dataAvailableFd, "AudioDataAvailable");
-	CloseFdAndPrintError(epollFd, "Epoll");
-}
-
-/// <summary>
-///     Main entry point for this application.
-/// </summary>
-int main(int argc, char* argv[])
-{
-	pthread_t tid;
-	Log_Debug("Application starting.\n");
-
-	if (!initialize_audio_buffer(&audioData)) {
-		Log_Debug("Failed to initialize the audio buffer.\n");
-		terminationRequired = true;
+	// check if the cooloff period has ended
+	struct timespec currentTime;
+	clock_gettime(CLOCK_REALTIME, &currentTime);
+	// Only process a new prediction at most every predictionCooloff seconds
+	if (currentTime.tv_sec - lastPredictionTime.tv_sec > predictionCooloff && prediction != 0) {
+		Log_Debug("INFO: Prediction: %s with confidence %.2f\n", categories[prediction], confidence);
+		if (isArmed) {
+			char event_string[EVENT_STRING_SIZE] = { 0 };
+			// Create event string (stringified JSON object)
+			bool success = construct_event_message(event_string,
+				sizeof(event_string), categories[prediction], confidence);
+			if (success) {
+				// Send event to the IoT Hub
+				send_telemetry(event_string);
+				save_event(event_string);
+				// Update event history in the device twin
+				char history_string[EVENT_HISTORY_BYTE_SIZE];
+				construct_history_message(history_string, sizeof(history_string));
+				if (!update_device_twin((unsigned char*)history_string)) {
+					Log_Debug("ERROR: Failed to set reported state for eventHistory.\n");
+				}
+				else {
+					Log_Debug("INFO: Reported state for eventHistory accepted by IoTHubClient.\n");
+				}
+			}
+		}
+		lastPredictionTime = currentTime;
 	}
-
-	if (!terminationRequired && !check_predict_setup()) {
-		Log_Debug("Prediction setup failed.\n");
-		terminationRequired = true;
-	}
-
-	initialize_event_history();
-
-	if (!terminationRequired && InitPeripheralsAndHandlers() != 0) {
-		Log_Debug("Initialization of peripherals failed.\n");
-		terminationRequired = true;
-	}
-
-	if (!terminationRequired
-		&& pthread_create(&tid, NULL, record_audio_thread, (void*)&audioData) != 0) {
-		Log_Debug("Microphone record thread creation failed.");
-		terminationRequired = true;
-	}
-
-	// Use epoll to wait for events and trigger handlers, until an error or SIGTERM happens
-	while (!terminationRequired) {
-		terminationRequired = WaitForEventAndCallHandler(epollFd) != 0;
-	}
-
-	ClosePeripheralsAndHandlers();
-	pthread_join(tid, NULL);
-	Log_Debug("Application exiting.\n");
-	return 0;
 }
 
 /// <summary>
 ///     Callback invoked when a Device Twin update is received from IoT Hub.
 ///     Updates local state for 'showEvents' (bool).
 /// </summary>
-/// <param name="payload">contains the Device Twin JSON document (desired and reported)</param>
-/// <param name="payloadSize">size of the Device Twin JSON document</param>
+/// <param name="payload">Contains the Device Twin JSON document (desired and reported).</param>
+/// <param name="payloadSize">Size of the Device Twin JSON document.</param>
 static void TwinCallback(DEVICE_TWIN_UPDATE_STATE updateState, const unsigned char* payload,
 	size_t payloadSize, void* userContextCallback)
 {
@@ -335,10 +371,10 @@ static void TwinCallback(DEVICE_TWIN_UPDATE_STATE updateState, const unsigned ch
 	if (armedState != -1) {
 		isArmed = (bool)armedState;
 		if (armedState) {
-			Log_Debug("Arming the security system.\n");
+			Log_Debug("INFO: Arming the security system.\n");
 		}
 		else {
-			Log_Debug("Disarming the security system.\n");
+			Log_Debug("INFO: Disarming the security system.\n");
 		}
 		update_device_twin_bool("armed", isArmed);
 	}

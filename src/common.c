@@ -6,7 +6,8 @@
 // Termination state
 volatile sig_atomic_t terminationRequired = false;
 
-bool initialize_audio_buffer(AudioBuffer* buf) {
+bool initialize_audio_buffer(AudioBuffer* buf)
+{
 	buf->read_index = MAX_BUFFERS - 1;
 	buf->write_index = 0;
 	buf->buffer_size = AUDIO_FRAME_SIZE;
@@ -15,7 +16,8 @@ bool initialize_audio_buffer(AudioBuffer* buf) {
 	return buf->dataAvailableFd >= 0;
 }
 
-bool write_audio_buffer(AudioBuffer* buf, float* srcData, unsigned short srcSize) {
+bool write_audio_buffer(AudioBuffer* buf, float* srcData, unsigned short srcSize)
+{
 	if (srcSize > buf->buffer_size) {
 		return false;
 	}
@@ -29,7 +31,8 @@ bool write_audio_buffer(AudioBuffer* buf, float* srcData, unsigned short srcSize
 	return true;
 }
 
-bool read_audio_buffer(AudioBuffer* buf, float* destBuf, unsigned short destSize) {
+bool read_audio_buffer(AudioBuffer* buf, float* destBuf, unsigned short destSize)
+{
 	if (destBuf == NULL || destSize < buf->buffer_size) {
 		return false;
 	}

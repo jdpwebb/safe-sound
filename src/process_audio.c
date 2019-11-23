@@ -31,26 +31,26 @@ const int prepared_recording_rows = sizeof(sample_wav_data) / (AUDIO_FRAME_SIZE 
 
 bool check_predict_setup()
 {
-    Log_Debug("Prerecorded sample contains %d rows of 16-bit PCM data\n",
+    Log_Debug("INFO: Prerecorded sample contains %d rows of 16-bit PCM data\n",
 		prepared_recording_rows);
 
     int input_size = mfcc_GetInputSize(0);
     if (input_size != AUDIO_FRAME_SIZE)
     {
-        Log_Debug("Expecting featurizer to take %d samples\n", AUDIO_FRAME_SIZE);
+        Log_Debug("ERROR: Expecting featurizer to take %d samples\n", AUDIO_FRAME_SIZE);
         return false;
     }
     int output_size = mfcc_GetOutputSize(0);
-    Log_Debug("Featurizer input %d and output %d.\n", input_size, output_size);
+    Log_Debug("INFO: Featurizer input %d and output %d.\n", input_size, output_size);
 
     input_size = model_GetInputSize(0);
     if (input_size != output_size) {
-        Log_Debug("Classifier input %d does not match featurizer output %d.\n",
+        Log_Debug("ERROR: Classifier input %d does not match featurizer output %d.\n",
 			input_size, output_size);
         return false;
     }
     output_size = model_GetOutputSize(0);
-    Log_Debug("Classifier input %d and output %d.\n", input_size, output_size);
+    Log_Debug("ERROR: Classifier input %d and output %d.\n", input_size, output_size);
 
     return true;
 }
@@ -70,7 +70,8 @@ static int argmax(float* buffer, int len)
     return max;
 }
 
-float smooth_prediction(int prediction, float confidence) {
+float smooth_prediction(int prediction, float confidence)
+{
 	if (confidence >= CONFIDENCE_THRESHOLD && prediction == last_prediction) {
 		++num_same_prediction;
 		overall_inverse_confidence *= (1.0f - confidence);
@@ -91,7 +92,8 @@ float smooth_prediction(int prediction, float confidence) {
 	return 0;
 }
 
-void predict_single_frame(float* inputData, int* prediction, float* confidence) {
+void predict_single_frame(float* inputData, int* prediction, float* confidence)
+{
 	float classifier_input_buffer[FEATURES_SIZE];
 	float classifier_output[NUM_CATEGORIES];
 	mfcc_Filter(NULL, inputData, classifier_input_buffer);
@@ -100,7 +102,8 @@ void predict_single_frame(float* inputData, int* prediction, float* confidence) 
 	*confidence = classifier_output[*prediction];
 }
 
-bool prepare_prerecorded(float* featurizer_input_buffer) {
+bool prepare_prerecorded(float* featurizer_input_buffer)
+{
 	for (int j = 0; j < AUDIO_FRAME_SIZE; j++)
 	{
 		featurizer_input_buffer[j] = (float)sample_wav_data[prepared_recording_index][j] / 32768.0f;

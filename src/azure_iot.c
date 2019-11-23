@@ -37,12 +37,12 @@ static const char* get_azure_sphere_provisioning_result_string(
 ///     Sets the IoT Hub authentication state for the app
 ///     The SAS Token expires which will set the authentication state
 /// </summary>
-static void HubConnectionStatusCallback(IOTHUB_CLIENT_CONNECTION_STATUS result,
+static void hub_connection_status_callback(IOTHUB_CLIENT_CONNECTION_STATUS result,
 	IOTHUB_CLIENT_CONNECTION_STATUS_REASON reason,
 	void* userContextCallback)
 {
 	iothubAuthenticated = (result == IOTHUB_CLIENT_CONNECTION_AUTHENTICATED);
-	Log_Debug("IoT Hub Authenticated: %s\n", get_reason_string(reason));
+	Log_Debug("INFO: IoT Hub Authenticated: %s\n", get_reason_string(reason));
 }
 
 /// <summary>
@@ -77,7 +77,7 @@ bool setup_hub_client(IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK twin_callback,
 	AZURE_SPHERE_PROV_RETURN_VALUE provResult =
 		IoTHubDeviceClient_LL_CreateWithAzureSphereDeviceAuthProvisioning(scopeId, 10000,
 			&iothubClientHandle);
-	Log_Debug("IoTHubDeviceClient_LL_CreateWithAzureSphereDeviceAuthProvisioning returned '%s'.\n",
+	Log_Debug("INFO: Device provisioning returned '%s'.\n",
 		get_azure_sphere_provisioning_result_string(provResult));
 
 	if (provResult.result != AZURE_SPHERE_PROV_RESULT_OK) {
@@ -107,7 +107,7 @@ bool setup_hub_client(IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK twin_callback,
 
 	if (IoTHubDeviceClient_LL_SetOption(iothubClientHandle, OPTION_KEEP_ALIVE,
 		&keepalivePeriodSeconds) != IOTHUB_CLIENT_OK) {
-		Log_Debug("ERROR: failure setting option \"%s\"\n", OPTION_KEEP_ALIVE);
+		Log_Debug("ERROR: Failure setting option \"%s\"\n", OPTION_KEEP_ALIVE);
 		return false;
 	}
 
@@ -115,12 +115,13 @@ bool setup_hub_client(IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK twin_callback,
 	// Tell the system about the callback function to call when we receive a Direct Method message from Azure
 	IoTHubDeviceClient_LL_SetDeviceMethodCallback(iothubClientHandle, direct_method_callback, NULL);
 	IoTHubDeviceClient_LL_SetConnectionStatusCallback(iothubClientHandle,
-		HubConnectionStatusCallback, NULL);
+		hub_connection_status_callback, NULL);
 	return true;
 }
 
 void iot_hub_update(IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK twin_callback,
-	IOTHUB_CLIENT_DEVICE_METHOD_CALLBACK_ASYNC direct_method_callback) {
+	IOTHUB_CLIENT_DEVICE_METHOD_CALLBACK_ASYNC direct_method_callback)
+{
 	bool isNetworkReady = false;
 	if (Networking_IsNetworkingReady(&isNetworkReady) != -1) {
 		if (isNetworkReady && !iothubAuthenticated) {
@@ -128,7 +129,7 @@ void iot_hub_update(IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK twin_callback,
 		}
 	}
 	else {
-		Log_Debug("Failed to get Network state\n");
+		Log_Debug("ERROR: Failed to get Network state\n");
 	}
 
 	if (iothubAuthenticated) {
@@ -143,7 +144,7 @@ void iot_hub_update(IOTHUB_CLIENT_DEVICE_TWIN_CALLBACK twin_callback,
 /// <param name="value">new telemetry value</param>
 void send_telemetry(const char* eventBuffer)
 {
-	Log_Debug("Sending IoT Hub Message: %s\n", eventBuffer);
+	Log_Debug("INFO: Sending IoT Hub message.\n", eventBuffer);
 
 	IOTHUB_MESSAGE_HANDLE messageHandle = IoTHubMessage_CreateFromString(eventBuffer);
 
@@ -154,18 +155,16 @@ void send_telemetry(const char* eventBuffer)
 
 	if (IoTHubDeviceClient_LL_SendEventAsync(iothubClientHandle, messageHandle, NULL,
 		/*&callback_param*/ 0) != IOTHUB_CLIENT_OK) {
-		Log_Debug("WARNING: failed to hand over the message to IoTHubClient\n");
-	}
-	else {
-		Log_Debug("INFO: IoTHubClient accepted the message for delivery\n");
+		Log_Debug("WARNING: failed to hand over the message to IoTHubClient.\n");
 	}
 
 	IoTHubMessage_Destroy(messageHandle);
 }
 
-bool update_device_twin(unsigned char* new_state) {
+bool update_device_twin(unsigned char* new_state)
+{
 	if (!is_hub_authenticated()) {
-		Log_Debug("Client not authenticated.\n");
+		Log_Debug("ERROR: Client not authenticated.\n");
 		return false;
 	}
 	return IoTHubDeviceClient_LL_SendReportedState(
@@ -192,7 +191,7 @@ void update_device_twin_bool(const char* propertyName, bool propertyValue)
 		Log_Debug("ERROR: failed to set reported state for '%s'.\n", propertyName);
 	}
 	else {
-		Log_Debug("INFO: Reported state for '%s' to value '%s'.\n", propertyName,
+		Log_Debug("INFO: Reported state for '%s' set to '%s'.\n", propertyName,
 			(propertyValue == true ? "true" : "false"));
 	}
 }
@@ -257,6 +256,7 @@ static const char* get_azure_sphere_provisioning_result_string(
 ///		Allows querying for the current authentication status.
 /// </summary>
 /// <returns>True if the IoT Hub has been successfully authenticated, false otherwise.</returns>
-bool is_hub_authenticated() {
+bool is_hub_authenticated()
+{
 	return iothubAuthenticated;
 }

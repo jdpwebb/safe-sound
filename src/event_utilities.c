@@ -6,21 +6,24 @@
 static char event_history[EVENT_HISTORY_SIZE][EVENT_STRING_SIZE];
 static size_t event_history_index = 0;
 
-void initialize_event_history(void) {
+void initialize_event_history(void)
+{
 	for (size_t i = 0; i < EVENT_HISTORY_SIZE; ++i) {
 		strcpy(event_history[i], "");
 	}
 	event_history_index = 0;
 }
 
-void save_event(const char* event_string) {
+void save_event(const char* event_string)
+{
 	strncpy(event_history[event_history_index], event_string, EVENT_STRING_SIZE);
 	event_history_index = (event_history_index + 1) % EVENT_HISTORY_SIZE;
 }
 
 bool construct_event_message(
 	char* buffer, size_t buf_size, const char* event_type, float confidence
-) {
+)
+{
 	const char* EventMsgTemplate = "{\"eventType\":\"%s\",\"confidence\":%1.2f,\"eventTime\":%d}";
 	struct timespec currentTime;
 	clock_gettime(CLOCK_REALTIME, &currentTime);
@@ -28,7 +31,8 @@ bool construct_event_message(
 	return len > 0;
 }
 
-bool construct_history_message(char* buffer, size_t buf_size) {
+bool construct_history_message(char* buffer, size_t buf_size)
+{
 	// Ensure the given buffer is big enough.
 	// Add enough size for each string plus comma (',') and key number ("0":)
 	if (buf_size < (EVENT_STRING_SIZE + 5) * EVENT_HISTORY_SIZE
