@@ -12,7 +12,7 @@
 #include <iothub.h>
 
 // Scope ID from Azure IoT Hub
-static char scopeId[] = "XXXXXXXXXXX";
+static char scopeId[SCOPE_ID_LENGTH];
 
 const int IOT_DEFAULT_POLL_PERIOD = 5;
 
@@ -43,6 +43,15 @@ static void hub_connection_status_callback(IOTHUB_CLIENT_CONNECTION_STATUS resul
 {
 	iothubAuthenticated = (result == IOTHUB_CLIENT_CONNECTION_AUTHENTICATED);
 	Log_Debug("INFO: IoT Hub Authenticated: %s\n", get_reason_string(reason));
+}
+
+/// <summary>
+///		Sets the scope ID for the IoT Hub client.
+/// </summary>
+/// <param name="scope_id">Scope ID unique to your IoT Hub.</param>
+void initialize_hub_client(const char* scope_id)
+{
+	strncpy(scopeId, scope_id, SCOPE_ID_LENGTH);
 }
 
 /// <summary>

@@ -27,7 +27,7 @@
 // This application uses machine learning to classify audio continuously.
 
 // Forward declaration of functions
-static int InitializeApp(void);
+static int InitializeApp(const char* scopeID);
 static int InitPeripheralsAndHandlers(void);
 static void ClosePeripheralsAndHandlers(void);
 static void ButtonTimerEventHandler(EventData* eventData);
@@ -73,7 +73,12 @@ int main(int argc, char* argv[])
 	pthread_t tid;
 	Log_Debug("INFO: Application starting.\n");
 
-	if (InitializeApp() < 0) {
+	if (argc != 2) {
+		Log_Debug("ERROR: ScopeID needs to be set in the app_manifest CmdArgs\n");
+		return -1;
+	}
+
+	if (InitializeApp(argv[1]) < 0) {
 		terminationRequired = true;
 	}
 
@@ -109,8 +114,10 @@ static void TerminationHandler(int signalNumber)
 ///		Initializes audio buffers, prediction models, event history and peripherals.
 ///	</summary>
 ///	<returns>0 on success, -1 on failure</returns>
-static int InitializeApp(void)
+static int InitializeApp(const char* scopeID)
 {
+	initialize_hub_client(scopeID);
+
 	if (!initialize_audio_buffer(&audioData)) {
 		Log_Debug("ERROR: Failed to initialize the audio buffer.\n");
 		return -1;
@@ -352,7 +359,7 @@ static void TwinCallback(DEVICE_TWIN_UPDATE_STATE updateState, const unsigned ch
 	memcpy(nullTerminatedJsonString, payload, payloadSize);
 	// Add the null terminator at the end.
 	nullTerminatedJsonString[nullTerminatedJsonSize - 1] = 0;
-	Log_Debug(nullTerminatedJsonString);
+
 	JSON_Value* rootProperties = NULL;
 	rootProperties = json_parse_string(nullTerminatedJsonString);
 	if (rootProperties == NULL) {

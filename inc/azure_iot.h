@@ -4,7 +4,15 @@
 #include <iothub_client_core_common.h>
 #include <azure_sphere_provisioning.h>
 
+#define SCOPE_ID_LENGTH 20
+
 extern const int IOT_DEFAULT_POLL_PERIOD;
+
+/// <summary>
+///		Sets the scope ID for the IoT Hub client.
+/// </summary>
+/// <param name="scope_id">Scope ID unique to your IoT Hub.</param>
+void initialize_hub_client(const char* scope_id);
 
 /// <summary>
 ///     Sets up the Azure IoT Hub connection (creates the iothubClientHandle)
