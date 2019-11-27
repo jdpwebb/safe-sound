@@ -1,5 +1,5 @@
 # Ignore output directories
-/out/
-/install/
+SafeSound_code/out/
+SafeSound_code/install/
 
-/.vs/
+SafeSound_code/.vs/
