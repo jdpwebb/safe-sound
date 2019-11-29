@@ -53,7 +53,8 @@ static GPIO_Value_Type buttonState = GPIO_Value_High;
 const float confidenceThresh = 0.95f;
 AudioBuffer audioData;
 const short debugAudioPeriod = 5;  // print debug info every 5 seconds
-const short predictionCooloff = 5;  // only allow a prediction every 5 seconds
+const short unsigned maxPredictionCooloff = 3600;  // 3600 seconds = 1 hour
+static short unsigned predictionCooloff = 5;  // only allow a prediction every 5 seconds
 static struct timespec lastDebugCheck, lastPredictionTime;
 static bool usePrerecorded = false;  // Specifies whether to use prerecorded audio
 
@@ -385,6 +386,13 @@ static void TwinCallback(DEVICE_TWIN_UPDATE_STATE updateState, const unsigned ch
 		}
 		update_device_twin_bool("armed", isArmed);
 	}
+	// Handle the Device Twin Desired Properties here.
+	double cooldownPeriod = json_object_get_number(desiredProperties, "eventCooldown");
+	if (cooldownPeriod > 0 && cooldownPeriod < maxPredictionCooloff) {
+		predictionCooloff = (short unsigned)cooldownPeriod;
+		Log_Debug("INFO: Updating cooloff period to %d.\n", predictionCooloff);
+		update_device_twin_int("eventCooldown", predictionCooloff);
+	}
 
 cleanup:
 	// Release the allocated memory.
@@ -406,12 +414,28 @@ static int DirectMethodCallback(const char* method_name, const unsigned char* pa
 
 	if (strcmp("simulateEvent", method_name) == 0)
 	{
+		SimulateEvent();
 		const char deviceMethodResponse[] = "{ \"Response\": \"Simulating window break event\" }";
 		*response_size = sizeof(deviceMethodResponse) - 1;
 		*response = malloc(*response_size);
 		(void)memcpy(*response, deviceMethodResponse, *response_size);
 		result = 200;
-		SimulateEvent();
+	}
+	else if (strcmp("clearHistory", method_name) == 0)
+	{
+		initialize_event_history();
+		// Update event history in the device twin
+		if (!update_device_twin("{\"eventHistory\":null}")) {
+			Log_Debug("ERROR: Failed to set reported state for eventHistory.\n");
+		}
+		else {
+			Log_Debug("INFO: Reported state for eventHistory accepted by IoTHubClient.\n");
+		}
+		const char deviceMethodResponse[] = "{ \"Response\": \"Success\" }";
+		*response_size = sizeof(deviceMethodResponse) - 1;
+		*response = malloc(*response_size);
+		(void)memcpy(*response, deviceMethodResponse, *response_size);
+		result = 200;
 	}
 	else
 	{

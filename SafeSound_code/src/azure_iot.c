@@ -192,7 +192,7 @@ void update_device_twin_bool(const char* propertyName, bool propertyValue)
 	int len = snprintf(reportedPropertiesString, 30, "{\"%s\":%s}", propertyName,
 		(propertyValue == true ? "true" : "false"));
 	if (len < 0) {
-		Log_Debug("ERROR: Couldn't create string for TwinReportBoolState.\n");
+		Log_Debug("ERROR: Couldn't create string for update_device_twin_bool.\n");
 		return;
 	}
 
@@ -202,6 +202,30 @@ void update_device_twin_bool(const char* propertyName, bool propertyValue)
 	else {
 		Log_Debug("INFO: Reported state for '%s' set to '%s'.\n", propertyName,
 			(propertyValue == true ? "true" : "false"));
+	}
+}
+
+/// <summary>
+///     Sends an update to the device twin.
+/// </summary>
+/// <param name="propertyName">the IoT Hub Device Twin property name</param>
+/// <param name="propertyValue">the IoT Hub Device Twin property value</param>
+void update_device_twin_int(const char* propertyName, int propertyValue)
+{
+	static char reportedPropertiesString[30] = { 0 };
+	int len = snprintf(reportedPropertiesString, 30, "{\"%s\":%d}", propertyName,
+		propertyValue);
+	if (len < 0) {
+		Log_Debug("ERROR: Couldn't create string for update_device_twin_int.\n");
+		return;
+	}
+
+	if (!update_device_twin((unsigned char*)reportedPropertiesString)) {
+		Log_Debug("ERROR: failed to set reported state for '%s'.\n", propertyName);
+	}
+	else {
+		Log_Debug("INFO: Reported state for '%s' set to '%d'.\n", propertyName,
+			propertyValue);
 	}
 }
 

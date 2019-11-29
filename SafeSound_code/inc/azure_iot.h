@@ -67,6 +67,13 @@ bool update_device_twin(unsigned char* new_state);
 void update_device_twin_bool(const char* propertyName, bool propertyValue);
 
 /// <summary>
+///     Sends an update to the device twin.
+/// </summary>
+/// <param name="propertyName">the IoT Hub Device Twin property name</param>
+/// <param name="propertyValue">the IoT Hub Device Twin property value</param>
+void update_device_twin_int(const char* propertyName, int propertyValue);
+
+/// <summary>
 ///		Allows querying for the current authentication status.
 /// </summary>
 /// <returns>True if the IoT Hub has been successfully authenticated, false otherwise.</returns>
