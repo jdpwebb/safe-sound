@@ -50,7 +50,7 @@ bool check_predict_setup()
         return false;
     }
     output_size = model_GetOutputSize(0);
-    Log_Debug("ERROR: Classifier input %d and output %d.\n", input_size, output_size);
+    Log_Debug("INFO: Classifier input %d and output %d.\n", input_size, output_size);
 
     return true;
 }
