@@ -66,7 +66,10 @@ bool construct_history_message(char* buffer, size_t buf_size)
 		++event_key;
 		i = (i - 1 + EVENT_HISTORY_SIZE) % EVENT_HISTORY_SIZE;
 	}
-	--string_index;  // remove last comma
+	// Only remove the comma if an event was added to the string
+	if (event_key != 0) {
+		--string_index;  // remove last comma
+	}
 	strcpy(buffer + string_index, HISTORY_FORMAT_END);
 	return true;
 }
