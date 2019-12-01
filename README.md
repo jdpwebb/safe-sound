@@ -19,3 +19,6 @@ Code found in azure_function.js is intended to run on an Azure Function and is u
 ### Audio Classifier Training Notebook
 
 The Safe_Sound_Audio_Classifier.ipynb is a Python notebook built to run on Google Colab and used to train the machine learning model that runs on the Azure Sphere. Colab has everything needed to run the notebook already installed. Just open the notebook in a browser and explore it.
+
+<a href="https://colab.research.google.com/github/jdpwebb/safe-sound/blob/master/Safe_Sound_Audio_Classifier.ipynb" rel="nofollow noopener" target="_blank"><img alt="Open In Colab" class="lazyload" loading="lazy" data-src="https://colab.research.google.com/assets/colab-badge.svg" src="https://colab.research.google.com/assets/colab-badge.svg">
+</a>
