@@ -2,11 +2,23 @@
 
 The Safe Sound Home Security System leverages machine learning to detect audible intrusion attempts and alert the home owner with a notification on the Safe Sound app. The Microsoft Azure Sphere is used as the basis for the device because of its focus on security. Read more about this project in [this tutorial](https://www.hackster.io/jdpwebb/ai-powered-smart-home-security-2e927c);
 
+<div align="center">
+    <img src="Resources/SafeSound.png" width="30%">
+</div>
+
 ## How It Works
 
 Audio is continuously collected by the Safe Sound device and classified into various categories using a machine learning model, such as background_noise, window_break, gunshot, etc.. If an audio event indicating a break-in is detected, the device sends a message via Azure Cloud Services to the Safe Sound app. More specifically, the Azure Sphere sends a telemetry message to Azure IoT Hub which triggers an Azure Function that uses the Firebase SDK to transmit a notification. 
 
 The Safe Sound app is built with Flutter and can be used on either an Android or iOS device.
+
+## Safe Sound App
+
+The Safe Sound App allows viewing recent events, arming/disarming the system, and some configuration.
+
+<img src="Resources/screenshots/EventsPage.png"  width="31%" style="margin-right: 1%; margin-left: 1%;">
+<img src="Resources/screenshots/ControlPage.png" width="31%" style="margin-right: 1%; margin-left: 1%;">
+<img src="Resources/screenshots/ConfigurationPage.png" width="31%" style="margin-right: 1%; margin-left: 1%;">
 
 ## Setup and Running
 
